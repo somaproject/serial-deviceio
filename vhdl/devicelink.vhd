@@ -10,15 +10,15 @@ use UNISIM.VComponents.all;
 
 entity devicelink is
   port (
-    TXCLKIN    : in  std_logic;
-    TXLOCKED   : in  std_logic;
+    TXCLKIN    : in  std_logic;         -- We still assume this is 50 MHz
+    TXLOCKED   : in  std_logic;        
     TXDIN      : in  std_logic_vector(9 downto 0);
     TXDOUT     : out std_logic_vector(7 downto 0);
     TXKOUT     : out std_logic;
     CLK        : out std_logic;
     CLK2X      : out std_logic;
     RESET      : out std_logic;
-    RXDIN      : in  std_logic_vector(7 downto 0);
+    RXDIN      : in  std_logic_vector(7 downto 0);  
     RXKIN      : in  std_logic;
     RXIO_P     : out std_logic;
     RXIO_N     : out std_logic;
@@ -223,14 +223,15 @@ begin  -- Behavioral
 
   end process rxclkproc;
 
-  fsm : process (cs, ltxkout, ltxdout, txcodeerr)
+  fsm : process (cs, ltxkout, ltxdout, txcodeerrreg, txcodeerr)
   begin
     case cs is
       when none     =>
         dsel        <= '1';
         forceerr    <= '0';
         ldebugstate <= "0000";
-        ns          <= sendsync;
+        ns <= sendsync;
+         
       when sendsync =>
         dsel        <= '1';
         forceerr    <= '0';

@@ -1,0 +1,9 @@
+DeviceLink Test
+
+The device link starts up by blasting K=1, D=0x1C until
+it receives a good 0xFE/1, at which point the link is "up" 
+
+1. start with a period of to-device silence
+2. then begin continually sending 0xFE/K=1 to simulate
+the initial handshake period 
+3. 
