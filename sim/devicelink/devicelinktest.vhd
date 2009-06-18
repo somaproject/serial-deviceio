@@ -35,16 +35,17 @@ architecture Behavioral of devicelinktest is
 
   end component;
 
-  component encode8b10b
+  component dlencode8b10b
     port (
       din  : in  std_logic_vector(7 downto 0);
       kin  : in  std_logic;
       clk  : in  std_logic;
-      dout : out std_logic_vector(9 downto 0));
+      dout : out std_logic_vector(9 downto 0);
+      ce: in std_logic);
   end component;
 
 
-  component decode8b10b
+  component dldecode8b10b
     port (
       clk      : in  std_logic;
       din      : in  std_logic_vector(9 downto 0);
@@ -56,8 +57,10 @@ architecture Behavioral of devicelinktest is
 
 
   signal fastclk : integer := 0;
+  signal halffastclk : integer := 0;
 
   signal TXCLKIN      : std_logic                    := '0';  -- We still assume this is 50 MHz
+  signal RXCLK : std_logic := '0';
   signal TXLOCKED     : std_logic                    := '1';
   signal TXDIN        : std_logic_vector(9 downto 0) := (others => '0');
   signal TXDOUT       : std_logic_vector(7 downto 0) := (others => '0');
@@ -103,16 +106,17 @@ begin  -- Behavioral
       DEBUGSTATE => DEBUGSTATE,
       DECODEERR  => DECODEERR);
 
-  to_device_encode : encode8b10b
+  to_device_encode : dlencode8b10b
     port map (
       din  => to_device_din,
       kin  => to_device_kin,
       clk  => TXCLKIN,
+      ce => '1', 
       dout => TXDIN);
 
-  from_device_decode : decode8b10b
+  from_device_decode : dldecode8b10b
     port map (
-      clk      => TXCLKIN,
+      clk      => RXCLK,
       din      => from_device_word,
       kout     => from_device_kout,
       dout     => from_device_dout,
@@ -139,6 +143,18 @@ begin  -- Behavioral
       elsif fastclk = 5 then
         TXCLKIN <= '1';
       end if;
+      
+      if fastclk = 0 then
+        RXCLK <= not RXCLK; 
+      end if;
+      
+      if fastclk mod 2 = 1 then
+        if halffastclk = 4 then
+          halffastclk <= 0;
+        else
+          halffastclk <= halffastclk + 1; 
+        end if;
+      end if;
     end if;
   end process;
 
@@ -153,7 +169,7 @@ begin  -- Behavioral
   begin
     corelocked := false;
     while not corelocked loop
-      wait on fastclk;
+      wait on halffastclk;
       capturedword := RXIO_P & capturedword(9 downto 1) ;
       if capturedword = "1101000011" or capturedword = "0010111100" then
         corelocked := true;
@@ -162,7 +178,7 @@ begin  -- Behavioral
 
     while true loop
       for i in 1 to 10 loop
-        wait on fastclk;
+        wait on halffastclk;
         capturedword :=  RXIO_P & capturedword(9 downto 1); 
       end loop;  -- i
       from_device_word <= capturedword;
@@ -197,6 +213,7 @@ begin  -- Behavioral
       for i in 0 to 255 loop
         RXDIN <= std_logic_vector(TO_UNSIGNED(i, 8));
         wait until rising_edge(TXCLKIN);
+        wait until rising_edge(TXCLKIN);
       end loop;  -- i
     end loop;
   end process device_send_data;
@@ -206,7 +223,7 @@ begin  -- Behavioral
     variable goodcnt : integer := 0;
     begin
       while true loop
-        wait until rising_edge(TXCLKIN);
+        wait until rising_edge(RXCLK);
 
         if DEVICE_RESET='0' then
           if from_device_dout = lastword + 1 then

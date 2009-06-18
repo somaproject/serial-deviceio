@@ -9,17 +9,17 @@ $(WORKDIR)/devicelink/behavioral.dat: $(WORKDIR)/touched ../../vhdl/devicelink.v
 
 hw: $(WORKDIR)/devicelink/behavioral.dat 
 
-$(WORKDIR)/encode8b10b/encode8b10b_a.dat: $(WORKDIR)/touched encode8b10b.vhd
+$(WORKDIR)/dlencode8b10b/dlencode8b10b_a.dat: $(WORKDIR)/touched dlencode8b10b.vhd
 	mkdir -p $(WORKDIR)
-	$(VHDLC) encode8b10b.vhd
+	$(VHDLC) dlencode8b10b.vhd
 
-$(WORKDIR)/decode8b10b/decode8b10b_a.dat: $(WORKDIR)/touched encode8b10b.vhd decode8b10b.vhd
+$(WORKDIR)/dldecode8b10b/dldecode8b10b_a.dat: $(WORKDIR)/touched dlencode8b10b.vhd dldecode8b10b.vhd
 	mkdir -p $(WORKDIR)
-	$(VHDLC) decode8b10b.vhd
+	$(VHDLC) dldecode8b10b.vhd
 
-comp: $(WORKDIR)/encode8b10b/encode8b10b_a.dat $(WORKDIR)/decode8b10b/decode8b10b_a.dat 
+comp: $(WORKDIR)/dlencode8b10b/dlencode8b10b_a.dat $(WORKDIR)/dldecode8b10b/dldecode8b10b_a.dat 
 
-$(WORKDIR)/devicelinktest/behavioral.dat: $(WORKDIR)/touched encode8b10b.vhd decode8b10b.vhd devicelinktest.vhd
+$(WORKDIR)/devicelinktest/behavioral.dat: $(WORKDIR)/touched dlencode8b10b.vhd dldecode8b10b.vhd devicelinktest.vhd
 	mkdir -p $(WORKDIR)
 	$(VHDLC) devicelinktest.vhd
 
