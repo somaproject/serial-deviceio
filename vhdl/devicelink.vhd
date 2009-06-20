@@ -11,20 +11,20 @@ use UNISIM.VComponents.all;
 entity devicelink is
   port (
     TXCLKIN    : in  std_logic;         -- We still assume this is 50 MHz
-    TXLOCKED   : in  std_logic;        
+    TXLOCKED   : in  std_logic;
     TXDIN      : in  std_logic_vector(9 downto 0);
     TXDOUT     : out std_logic_vector(7 downto 0);
     TXKOUT     : out std_logic;
     CLK        : out std_logic;
     CLK2X      : out std_logic;
     RESET      : out std_logic;
-    RXDIN      : in  std_logic_vector(7 downto 0);  
+    RXDIN      : in  std_logic_vector(7 downto 0);
     RXKIN      : in  std_logic;
     RXIO_P     : out std_logic;
     RXIO_N     : out std_logic;
-    LINKLOCK : out std_logic; 
+    LINKLOCK   : out std_logic;
     DEBUGSTATE : out std_logic_vector(3 downto 0);
-    DEBUGOUT : out std_logic_vector(31 downto 0); 
+    DEBUGOUT   : out std_logic_vector(31 downto 0) := (others => '0');
     DECODEERR  : out std_logic
     );
 
@@ -47,6 +47,8 @@ architecture Behavioral of devicelink is
   signal derr    : std_logic := '0';
   signal ltxkout : std_logic := '0';
 
+  signal encrst : std_logic := '1';
+
   signal rxdinl : std_logic_vector(7 downto 0) := (others => '0');
   signal rxkinl : std_logic                    := '0';
   signal dsel   : std_logic                    := '0';
@@ -59,6 +61,9 @@ architecture Behavioral of devicelink is
   signal forceerr     : std_logic                     := '0';
   signal txcodeerr    : std_logic                     := '0';
   signal txcodeerrreg : std_logic_vector(63 downto 0) := (others => '1');
+  signal rxcontrol    : std_logic                     := '0';
+
+  signal rxsenden : std_logic := '0';
 
   signal sout : std_logic_vector(9 downto 0) := (others => '0');
 
@@ -67,26 +72,32 @@ architecture Behavioral of devicelink is
   signal ldebugstate : std_logic_vector(3 downto 0) := (others => '0');
 
   signal encodece : std_logic := '0';
+  signal decodece : std_logic := '0';
   
-  type states is (none, sendsync, lock, unlocked);
+  type   states is (none, sendsync, encst1, encst2, waitup, lock, unlocked);
   signal cs, ns : states := none;
 
   component dlencode8b10b
     port (
-      din  : in  std_logic_vector(7 downto 0);
-      kin  : in  std_logic;
-      clk  : in  std_logic;
-      ce : in std_logic;
-      dout : out std_logic_vector(9 downto 0));
+      din        : in  std_logic_vector(7 downto 0);
+      kin        : in  std_logic;
+      clk        : in  std_logic;
+      ce         : in  std_logic;
+      dout       : out std_logic_vector(9 downto 0);
+      force_disp : in  std_logic;
+      disp_in    : in  std_logic);
   end component;
 
 
   component dldecode8b10b
     port (
-      clk      : in  std_logic;
-      din      : in  std_logic_vector(9 downto 0);
-      dout     : out std_logic_vector(7 downto 0);
-      kout     : out std_logic;
+      clk   : in  std_logic;
+      din   : in  std_logic_vector(9 downto 0);
+      dout  : out std_logic_vector(7 downto 0);
+      kout  : out std_logic;
+      sinit : in  std_logic;
+      ce : in std_logic; 
+
       code_err : out std_logic;
       disp_err : out std_logic);
   end component;
@@ -96,18 +107,22 @@ begin  -- Behavioral
 
   encoder : dlencode8b10b
     port map (
-      DIN  => din,
-      KIN  => kin,
-      DOUT => ol,
-      CE => encodece, 
-      CLK  => txclk);
+      DIN        => din,
+      KIN        => kin,
+      DOUT       => ol,
+      CE         => encodece,
+      CLK        => txclk,
+      force_disp => encrst,
+      disp_in    => '1');
 
   decoder : dldecode8b10b
     port map (
       CLK      => txclk,
-      DIN      => txdinl,
+      DIN      => txdinll,
       DOUT     => ltxdout,
       KOUT     => ltxkout,
+      sinit    => encrst,
+      ce => decodece, 
       CODE_ERR => cerr,
       DISP_ERR => derr);
 
@@ -121,15 +136,15 @@ begin  -- Behavioral
     DLL_FREQUENCY_MODE => "LOW",
     DFS_FREQUENCY_MODE => "LOW")
     port map (
-      CLKIN            => TXCLKIN,
-      CLKFB            => txclk,
-      RST              => nottxlocked,
-      PSEN             => '0',
-      CLK0             => txclkint,
-      CLK2x            => CLK2X,
-      CLKFX            => rxhbitclkint,
-      CLKFX180         => rxhbitclk180int,
-      LOCKED           => dcmlocked);
+      CLKIN    => TXCLKIN,
+      CLKFB    => txclk,
+      RST      => nottxlocked,
+      PSEN     => '0',
+      CLK0     => txclkint,
+      CLK2x    => CLK2X,
+      CLKFX    => rxhbitclkint,
+      CLKFX180 => rxhbitclk180int,
+      LOCKED   => dcmlocked);
 
   txclk_bufg : BUFG port map (
     O => txclk,
@@ -146,10 +161,10 @@ begin  -- Behavioral
     I => rxhbitclk180int);
 
 
-  DIN <= rxdinl when dsel = '0' else X"1C";
+  DIN <= rxdinl when dsel = '0' else X"3C";
   KIN <= rxkinl when dsel = '0' else '1';
 
-  
+
   txcodeerr <= cerr or derr;
 
   DECODEERR  <= txcodeerr;
@@ -172,9 +187,9 @@ begin  -- Behavioral
     generic map (
       IOSTANDARD => "DEFAULT")
     port map (
-      O          => RXIO_P,
-      OB         => RXIO_N,
-      I          => rxio
+      O  => RXIO_P,
+      OB => RXIO_N,
+      I  => rxio
       );
 
   main : process (txclk, rst)
@@ -183,7 +198,7 @@ begin  -- Behavioral
 
       cs           <= none;
       txcodeerrreg <= (others => '1');
-      encodece <= '0'; 
+      encodece     <= '0';
     else
       if rising_edge(txclk) then
         cs <= ns;
@@ -192,48 +207,61 @@ begin  -- Behavioral
         rxkinl <= RXKIN;
 
         txdinl  <= TXDIN;
-        TXDOUT  <= ltxdout;
-        TXKOUT  <= ltxkout;
+        txdinll <= txdinl;
 
-        if forceerr = '0' then
+        TXDOUT <= ltxdout;
+        TXKOUT <= ltxkout;
+
+        if rxcontrol = '0' then
           oll <= ol;
         else
-          oll <= "0000000000";
+          if forceerr = '1' then
+            oll <= "0000000000";
+          else
+            oll <= "1011110000";
+          end if;
         end if;
 
         txcodeerrreg <= (txcodeerrreg(62 downto 0) & txcodeerr);
+        if rxsenden = '0' then
+          encodece <= '0';
+        else
+          encodece <= not encodece;
+        end if;
 
-        encodece <= not encodece;
 
         if cs = lock then
           LINKLOCK <= '1';
         else
-          LINKLOCK <= '0'; 
+          LINKLOCK <= '0';
         end if;
 
         -- debugging
         if cs = lock then
           DEBUGOUT(0) <= '1';
-          DEBUGOUT(1) <= '0'; 
+          DEBUGOUT(1) <= '0';
         elsif cs = unlocked then
           DEBUGOUT(0) <= '1';
-          DEBUGOUT(1) <= '1'; 
+          DEBUGOUT(1) <= '1';
         else
           DEBUGOUT(0) <= '0';
-          DEBUGOUT(1) <= '0'; 
+          DEBUGOUT(1) <= '0';
         end if;
 
-        DEBUGOUT(15 downto 8) <= din;
-        DEBUGOUT(2) <= kin;
-        DEBUGOUT(3) <= encodece;
-        DEBUGOUT(7 downto 4) <=  ldebugstate;
+        DEBUGOUT(15 downto 8)  <= din;
+        DEBUGOUT(2)            <= kin;
+        DEBUGOUT(3)            <= encodece;
+        DEBUGOUT(7 downto 4)   <= ldebugstate;
         DEBUGOUT(25 downto 16) <= ol;
         
       end if;
     end if;
   end process main;
 
-  rxclkproc         : process(rxhbitclk)
+  encrst <= '1' when cs = none else '0';
+
+
+  rxclkproc : process(rxhbitclk)
     variable bitreg : std_logic_vector(4 downto 0) := "00001";
 
   begin
@@ -249,46 +277,93 @@ begin  -- Behavioral
 
   end process rxclkproc;
 
-  fsm : process (cs, ltxkout, ltxdout, txcodeerrreg, txcodeerr)
+  fsm : process (cs, ltxkout, txdinl, ltxdout, txcodeerrreg, txcodeerr)
   begin
     case cs is
-      when none     =>
+      when none =>
         dsel        <= '1';
         forceerr    <= '0';
+        rxcontrol   <= '0';
+        rxsenden    <= '0';
         ldebugstate <= "0000";
-        ns <= sendsync;
-         
+        decodece <= '0'; 
+        ns          <= sendsync;
+        
       when sendsync =>
         dsel        <= '1';
         forceerr    <= '0';
+        rxcontrol   <= '1';
+        rxsenden    <= '0';
         ldebugstate <= "0001";
-        if ltxkout = '1' and ltxdout = X"FE" and txcodeerrreg = X"0000000000000000" then
-          ns        <= lock;
-
+        decodece <= '0'; 
+        if txdinl = "0110000011" or txdinl = "1001111100" then
+          ns <= encst1;
         else
-          ns        <= sendsync;
+          ns <= sendsync;
         end if;
         
-      when lock     =>
+      when encst1 =>
+        dsel        <= '1';
+        forceerr    <= '0';
+        rxcontrol   <= '0';
+        rxsenden    <= '1';
+        ldebugstate <= "0010";
+        decodece <= '1'; 
+        ns          <= encst2;
+        
+
+      when encst2 =>
+        dsel        <= '1';
+        forceerr    <= '0';
+        rxcontrol   <= '0';
+        rxsenden    <= '1';
+        ldebugstate <= "0011";
+        decodece <= '1'; 
+        ns          <= waitup;
+        
+
+      when waitup =>
         dsel        <= '0';
         forceerr    <= '0';
-        ldebugstate <= "0011";
-        if txcodeerr = '1' then
-          ns        <= unlocked;
+        rxcontrol   <= '0';
+        rxsenden    <= '1';
+        ldebugstate <= "0100";
+        decodece <= '1'; 
+        if ltxdout = X"FE" and ltxkout = '1' then
+          ns <= lock;
         else
-          ns        <= lock;
+          ns <= waitup;
+        end if;
+
+      when lock =>
+        dsel        <= '0';
+        forceerr    <= '0';
+        rxcontrol   <= '0';
+        rxsenden    <= '1';
+        ldebugstate <= "0101";
+        decodece <= '1'; 
+        if txcodeerr = '1' then
+          ns <= unlocked;
+        else
+          ns <= lock;
         end if;
         
       when unlocked =>
         dsel        <= '0';
         forceerr    <= '1';
-        ldebugstate <= "0100";
+        rxcontrol   <= '1';
+        rxsenden    <= '1';
+        ldebugstate <= "0110";
+        decodece <= '0'; 
         ns          <= none;
         
-      when others   =>
+      when others =>
         dsel        <= '0';
         forceerr    <= '0';
+        rxcontrol   <= '0';
+        rxsenden    <= '0';
         ldebugstate <= "1000";
+        decodece <= '0'; 
         ns          <= none;
     end case;
 
