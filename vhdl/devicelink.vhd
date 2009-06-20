@@ -22,7 +22,9 @@ entity devicelink is
     RXKIN      : in  std_logic;
     RXIO_P     : out std_logic;
     RXIO_N     : out std_logic;
+    LINKLOCK : out std_logic; 
     DEBUGSTATE : out std_logic_vector(3 downto 0);
+    DEBUGOUT : out std_logic_vector(31 downto 0); 
     DECODEERR  : out std_logic
     );
 
@@ -147,7 +149,7 @@ begin  -- Behavioral
   DIN <= rxdinl when dsel = '0' else X"1C";
   KIN <= rxkinl when dsel = '0' else '1';
 
-
+  
   txcodeerr <= cerr or derr;
 
   DECODEERR  <= txcodeerr;
@@ -181,7 +183,7 @@ begin  -- Behavioral
 
       cs           <= none;
       txcodeerrreg <= (others => '1');
-
+      encodece <= '0'; 
     else
       if rising_edge(txclk) then
         cs <= ns;
@@ -202,6 +204,30 @@ begin  -- Behavioral
         txcodeerrreg <= (txcodeerrreg(62 downto 0) & txcodeerr);
 
         encodece <= not encodece;
+
+        if cs = lock then
+          LINKLOCK <= '1';
+        else
+          LINKLOCK <= '0'; 
+        end if;
+
+        -- debugging
+        if cs = lock then
+          DEBUGOUT(0) <= '1';
+          DEBUGOUT(1) <= '0'; 
+        elsif cs = unlocked then
+          DEBUGOUT(0) <= '1';
+          DEBUGOUT(1) <= '1'; 
+        else
+          DEBUGOUT(0) <= '0';
+          DEBUGOUT(1) <= '0'; 
+        end if;
+
+        DEBUGOUT(15 downto 8) <= din;
+        DEBUGOUT(2) <= kin;
+        DEBUGOUT(3) <= encodece;
+        DEBUGOUT(7 downto 4) <=  ldebugstate;
+        DEBUGOUT(25 downto 16) <= ol;
         
       end if;
     end if;
