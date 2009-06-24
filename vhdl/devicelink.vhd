@@ -70,13 +70,15 @@ architecture Behavioral of devicelink is
   signal rxio : std_logic := '0';
 
   signal ldebugstate : std_logic_vector(3 downto 0) := (others => '0');
-
+  signal encodece_real : std_logic := '0';
+  
   signal encodece : std_logic := '0';
   signal decodece : std_logic := '0';
+  signal decrst : std_logic := '0';
   
   type   states is (none, sendsync, encst1, encst2, waitup, lock, unlocked);
   signal cs, ns : states := none;
-
+  
   component dlencode8b10b
     port (
       din        : in  std_logic_vector(7 downto 0);
@@ -85,6 +87,7 @@ architecture Behavioral of devicelink is
       ce         : in  std_logic;
       dout       : out std_logic_vector(9 downto 0);
       force_disp : in  std_logic;
+      force_code : in std_logic; 
       disp_in    : in  std_logic);
   end component;
 
@@ -110,9 +113,10 @@ begin  -- Behavioral
       DIN        => din,
       KIN        => kin,
       DOUT       => ol,
-      CE         => encodece,
+      CE         => encodece_real,
       CLK        => txclk,
       force_disp => encrst,
+      force_code => encrst, 
       disp_in    => '1');
 
   decoder : dldecode8b10b
@@ -121,7 +125,7 @@ begin  -- Behavioral
       DIN      => txdinll,
       DOUT     => ltxdout,
       KOUT     => ltxkout,
-      sinit    => encrst,
+      sinit    => decrst,
       ce => decodece, 
       CODE_ERR => cerr,
       DISP_ERR => derr);
@@ -161,14 +165,18 @@ begin  -- Behavioral
     I => rxhbitclk180int);
 
 
-  DIN <= rxdinl when dsel = '0' else X"3C";
-  KIN <= rxkinl when dsel = '0' else '1';
+  din <= rxdinl when dsel = '0' else X"3C";
+  kin <= rxkinl when dsel = '0' else '1';
 
 
   txcodeerr <= cerr or derr;
 
   DECODEERR  <= txcodeerr;
   DEBUGSTATE <= ldebugstate;
+
+  encrst <= '1' when cs = encst1 else '0';
+  decrst <= '1' when cs= none else '0'; 
+
 
   FDDRRSE_inst : FDDRRSE
     port map (
@@ -183,6 +191,7 @@ begin  -- Behavioral
       );
 
 
+  
   RXIO_obufds : OBUFDS
     generic map (
       IOSTANDARD => "DEFAULT")
@@ -191,7 +200,8 @@ begin  -- Behavioral
       OB => RXIO_N,
       I  => rxio
       );
-
+  encodece_real <= '1' when cs = encst1 else encodece;
+  
   main : process (txclk, rst)
   begin  -- process main
     if rst = '1' then                   -- asynchronous reset
@@ -258,9 +268,6 @@ begin  -- Behavioral
     end if;
   end process main;
 
-  encrst <= '1' when cs = none else '0';
-
-
   rxclkproc : process(rxhbitclk)
     variable bitreg : std_logic_vector(4 downto 0) := "00001";
 
@@ -305,7 +312,7 @@ begin  -- Behavioral
       when encst1 =>
         dsel        <= '1';
         forceerr    <= '0';
-        rxcontrol   <= '0';
+        rxcontrol   <= '1';
         rxsenden    <= '1';
         ldebugstate <= "0010";
         decodece <= '1'; 
@@ -315,7 +322,7 @@ begin  -- Behavioral
       when encst2 =>
         dsel        <= '1';
         forceerr    <= '0';
-        rxcontrol   <= '0';
+        rxcontrol   <= '1';
         rxsenden    <= '1';
         ldebugstate <= "0011";
         decodece <= '1'; 
