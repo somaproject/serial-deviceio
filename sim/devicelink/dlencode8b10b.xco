@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 11.1
-# Date: Wed Jun 17 13:34:55 2009
+# Date: Wed Jun 24 13:07:46 2009
 #
 ##############################################################
 #
@@ -46,12 +46,12 @@ CSET clock_enable=true
 CSET code_error_output=false
 CSET component_name=dlencode8b10b
 CSET disparity_output=false
-CSET force_code=false
+CSET force_code=true
 CSET force_code_symbol=D_10_2_pos
-CSET force_disparity=false
+CSET force_disparity=true
 CSET implementation=LUT_Based
 CSET new_data=false
 CSET secondary_encoder=false
 # END Parameters
 GENERATE
-# CRC: a296cf4e
+# CRC: be1d6568
